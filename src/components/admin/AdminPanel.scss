@@ -217,3 +217,117 @@
 .podium-gold { order: 2; }
 .podium-silver { order: 1; }
 .podium-bronze { order: 3; }
+
+// src/components/AdminPanel/AdminPanel.scss
+
+// --- Add these new styles for the Presenter View Options ---
+
+.admin-options-container {
+    width: 100%;
+    margin-top: 24px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 24px;
+    display: grid;
+    gap: 12px;
+
+    // Default layout for 2 or 4 options
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+// Style for standard text choice buttons
+.admin-option-btn {
+    background-color: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 1.1rem;
+    text-align: center;
+    color: #374151;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+// Style for the disabled text input field
+.admin-fill-text-display {
+    grid-column: 1 / -1; // Make it span the full width
+
+    input {
+        width: 100%;
+        padding: 16px;
+        font-size: 1.1rem;
+        border: 2px dashed #d1d5db;
+        border-radius: 8px;
+        background-color: #f9fafb;
+        text-align: center;
+        box-sizing: border-box;
+
+        &::placeholder {
+            color: #9ca3af;
+        }
+    }
+}
+
+// Style for image-based choices
+.admin-option-image-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 12px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+
+    .admin-option-image {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 6px;
+    }
+
+    .admin-option-label {
+        font-size: 1.1rem;
+        font-weight: 500;
+        color: #374151;
+    }
+}
+// src/components/AdminPanel/AdminPanel.scss
+
+// ... (keep all your existing styles) ...
+
+// Styles for the new Results View
+.admin-results-section {
+  background: #f9fafb;
+  text-align: center;
+
+  .results-header {
+    font-weight: 600;
+    color: #4b5563;
+    margin-bottom: 24px;
+    font-size: 1.2rem;
+  }
+
+  .admin-options-container.results {
+    .admin-option-btn {
+      transition: all 0.4s ease-in-out;
+      
+      // Style for incorrect answers
+      &.incorrect {
+        opacity: 0.3;
+        background-color: #f3f4f6;
+        border-color: #e5e7eb;
+        filter: grayscale(80%);
+      }
+      
+      // Style for the correct answer
+      &.correct {
+        background-color: #dcfce7; // A pleasant green
+        border-color: #22c55e;
+        color: #15803d;
+        font-weight: 700;
+        transform: scale(1.05); // Make it pop
+        box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+      }
+    }
+  }
+}

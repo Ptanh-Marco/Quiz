@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from "react";
-// CORRECT
 import { db } from '../../config/firebaseConfig';
-import { ref, onValue, push, set, get } from "firebase/database";
+import { ref, onValue, push, set, get, remove } from "firebase/database";
 import Confetti from "react-confetti";
 import "./ParticipantQuiz.scss";
 
 const QUESTION_TIME_LIMIT = 15;
 
 export default function ParticipantQuiz() {
-    // --- STATE MANAGEMENT (Unchanged) ---
+    // --- STATE MANAGEMENT ---
     const [username, setUsername] = useState("");
     const [participantId, setParticipantId] = useState(sessionStorage.getItem("participantId"));
     const [quizState, setQuizState] = useState({
@@ -24,7 +23,7 @@ export default function ParticipantQuiz() {
     const [blocked, setBlocked] = useState(false);
     const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-    // --- CORE LOGIC & SIDE EFFECTS (Unchanged) ---
+    // --- JOIN LOGIC ---
     const handleJoin = async () => {
         if (!username.trim()) {
             alert("Please enter your name!");
@@ -50,8 +49,10 @@ export default function ParticipantQuiz() {
         setMyScore(0);
         setMyRank(0);
         setQuizState({ status: "joining", currentQuestionIndex: 0, timer: QUESTION_TIME_LIMIT });
+        setBlocked(false);
     };
 
+    // --- ENHANCED: Listen for quizState changes and checkpoint participant status ---
     useEffect(() => {
         const quizStateRef = ref(db, "quizState");
         const unsubscribe = onValue(quizStateRef, (snap) => {
@@ -59,12 +60,25 @@ export default function ParticipantQuiz() {
             if (state.finished) {
                 setQuizState((prev) => ({ ...prev, status: "finished" }));
             } else if (state.started) {
-                setQuizState((prev) => ({
-                    ...prev,
-                    status: "playing",
-                    currentQuestionIndex: state.currentQuestionIndex || 0,
-                    timer: state.timer || QUESTION_TIME_LIMIT,
-                }));
+                // Only play if still in participants node
+                if (participantId) {
+                    const checkParticipant = async () => {
+                        const pSnap = await get(ref(db, `participants/${participantId}`));
+                        if (pSnap.exists()) {
+                            setQuizState((prev) => ({
+                                ...prev,
+                                status: "playing",
+                                currentQuestionIndex: state.currentQuestionIndex || 0,
+                                timer: state.timer || QUESTION_TIME_LIMIT,
+                            }));
+                        } else {
+                            setBlocked(true);
+                        }
+                    };
+                    checkParticipant();
+                } else {
+                    setBlocked(true);
+                }
             } else {
                 if (quizState.status === 'playing' || quizState.status === 'finished') {
                     handlePlayAgain();
@@ -72,8 +86,21 @@ export default function ParticipantQuiz() {
             }
         });
         return () => unsubscribe();
-    }, [quizState.status]);
+    }, [quizState.status, participantId]);
 
+    // --- Listen for participant deletion (if admin removes late joiners) ---
+    useEffect(() => {
+        if (!participantId) return;
+        const participantRef = ref(db, `participants/${participantId}`);
+        const unsubscribe = onValue(participantRef, (snap) => {
+            if (!snap.exists()) {
+                handlePlayAgain();
+            }
+        });
+        return () => unsubscribe();
+    }, [participantId]);
+
+    // --- Listen for questions when playing ---
     useEffect(() => {
         if (quizState.status === "playing") {
             const questionsRef = ref(db, "questions");
@@ -84,7 +111,7 @@ export default function ParticipantQuiz() {
             return () => unsubscribe();
         }
     }, [quizState.status]);
-
+    // --- LISTEN FOR SCORES AND RANK ---
     useEffect(() => {
         if (!participantId) return;
         const myScoreRef = ref(db, `scores/${participantId}/perQuestion`);
@@ -111,12 +138,14 @@ export default function ParticipantQuiz() {
         };
     }, [participantId]);
 
+    // --- WINDOW RESIZE HANDLER ---
     useEffect(() => {
         const handleResize = () => setWindowSize({ width: window.innerWidth, height: window.innerHeight });
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
+    // --- SUBMIT ANSWER LOGIC ---
     const handleSubmitAnswer = (questionId, answer) => {
         if (!participantId || answers[questionId]) return;
         set(ref(db, `quizState/answers/${participantId}/${questionId}`), {
@@ -144,87 +173,97 @@ export default function ParticipantQuiz() {
 
             {!blocked && (
                 <>
-                    {/* Screens 1, 2 (Unchanged) */}
-                    <div className="screen join-screen">
-                        <div className="card join-card">
-                            <h1>Football Fans Quiz</h1>
-                            <p>Enter your name to join the fun!</p>
-                            <div className="join-form">
-                                <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Your Name" className="username-input" />
-                                <button onClick={handleJoin} className="join-btn">Join Quiz</button>
+                    {/* JOIN SCREEN */}
+                    {quizState.status === "joining" && (
+                        <div className="screen join-screen">
+                            <div className="card join-card">
+                                <h1>Football Fans Quiz</h1>
+                                <p>Enter your name to join the fun!</p>
+                                <div className="join-form">
+                                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Your Name" className="username-input" />
+                                    <button onClick={handleJoin} className="join-btn">Join Quiz</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="screen waiting-screen">
-                        <div className="card">
-                            <h2>Welcome, {username || "Participant"}!</h2>
-                            <p>You're in! Get ready...</p>
-                            <div className="loader"></div>
-                            <p>Waiting for the admin to start the quiz.</p>
-                        </div>
-                    </div>
+                    )}
 
-                    {/* Screen 3: Playing (*** UPDATED ***) */}
-                    <div className="screen playing-screen">
-                        {!q ? (
-                            <div className="loader"></div>
-                        ) : (
-                            <div className="card quiz-card">
-                                <header className="quiz-header">
-                                    <div className="question-counter">Question {quizState.currentQuestionIndex + 1} / {questions.length}</div>
-                                    <div className={`timer ${quizState.timer <= 5 ? 'low-time' : ''}`}>{quizState.timer}</div>
-                                    <div className="live-score">Score: <strong>{myScore}</strong></div>
-                                </header>
-                                <main className="quiz-body">
-                                    {q.image && <img className="question-image" src={q.image} alt="Question visual" />}
-                                    <h2 className="question-text">{q.question}</h2>
-                                    <div className="options-container">
-                                        {/* single_choice */}
-                                        {q.type === "single_choice" &&
-                                            q.options.map((opt) => (
-                                                <button key={opt} className={`option-btn ${answers[q.id] === opt ? "selected" : ""} ${hasAnsweredCurrent ? "answered" : ""}`} disabled={hasAnsweredCurrent} onClick={() => handleSubmitAnswer(q.id, opt)}>
-                                                    {opt}
-                                                </button>
-                                            ))}
-                                        {/* fill_text */}
-                                        {q.type === "fill_text" && (
-                                            <form className="text-answer-form" onSubmit={(e) => { e.preventDefault(); handleSubmitAnswer(q.id, e.target.answer.value); }}>
-                                                <input type="text" name="answer" className="text-input" disabled={hasAnsweredCurrent} placeholder="Type your answer..." />
-                                                <button type="submit" className="submit-btn" disabled={hasAnsweredCurrent}>Submit</button>
-                                            </form>
-                                        )}
-                                        {/* *** NEW: image_choice logic for object format *** */}
-                                        {q.type === "image_choice" &&
-                                            q.options.map((option) => (
-                                                <button
-                                                    key={option.label}
-                                                    className={`option-image-btn ${answers[q.id] === option.label ? "selected" : ""} ${hasAnsweredCurrent ? "answered" : ""}`}
-                                                    disabled={hasAnsweredCurrent}
-                                                    onClick={() => handleSubmitAnswer(q.id, option.label)}
-                                                >
-                                                    <img src={option.image} alt={option.label} className="option-image" />
-                                                    <span className="option-label">{option.label}</span>
-                                                </button>
-                                            ))}
-                                    </div>
-                                    {hasAnsweredCurrent && <div className="answer-feedback">Answer locked! Waiting for next question...</div>}
-                                </main>
+                    {/* WAITING SCREEN */}
+                    {quizState.status === "waiting" && (
+                        <div className="screen waiting-screen">
+                            <div className="card">
+                                <h2>Welcome, {username || "Participant"}!</h2>
+                                <p>You're in! Get ready...</p>
+                                <div className="loader"></div>
+                                <p>Waiting for the admin to start the quiz.</p>
                             </div>
-                        )}
-                    </div>
-
-                    {/* Screen 4: Finished (Unchanged) */}
-                    <div className="screen finished-screen">
-                        <div className="card achievement-card">
-                            <h2>🎉 Quiz Finished! 🎉</h2>
-                            <p>Well done, {username || "Participant"}!</p>
-                            <div className="final-score-rank">
-                                <div className="result-box"><span>Your Score</span><strong>{myScore}</strong></div>
-                                <div className="result-box"><span>Your Rank</span><strong>{myRank} / {totalParticipants}</strong></div>
-                            </div>
-                            <button className="play-again-btn" onClick={handlePlayAgain}>Play Again</button>
                         </div>
-                    </div>
+                    )}
+
+                    {/* PLAYING SCREEN */}
+                    {quizState.status === "playing" && (
+                        <div className="screen playing-screen">
+                            {!q ? (
+                                <div className="loader"></div>
+                            ) : (
+                                <div className="card quiz-card">
+                                    <header className="quiz-header">
+                                        <div className="question-counter">Question {quizState.currentQuestionIndex + 1} / {questions.length}</div>
+                                        <div className={`timer ${quizState.timer <= 5 ? 'low-time' : ''}`}>{quizState.timer}</div>
+                                        <div className="live-score">Score: <strong>{myScore}</strong></div>
+                                    </header>
+                                    <main className="quiz-body">
+                                        {q.image && <img className="question-image" src={q.image} alt="Question visual" />}
+                                        <h2 className="question-text">{q.question}</h2>
+                                        <div className="options-container">
+                                            {/* single_choice */}
+                                            {q.type === "single_choice" &&
+                                                q.options.map((opt) => (
+                                                    <button key={opt} className={`option-btn ${answers[q.id] === opt ? "selected" : ""} ${hasAnsweredCurrent ? "answered" : ""}`} disabled={hasAnsweredCurrent} onClick={() => handleSubmitAnswer(q.id, opt)}>
+                                                        {opt}
+                                                    </button>
+                                                ))}
+                                            {/* fill_text */}
+                                            {q.type === "fill_text" && (
+                                                <form className="text-answer-form" onSubmit={(e) => { e.preventDefault(); handleSubmitAnswer(q.id, e.target.answer.value); }}>
+                                                    <input type="text" name="answer" className="text-input" disabled={hasAnsweredCurrent} placeholder="Type your answer..." />
+                                                    <button type="submit" className="submit-btn" disabled={hasAnsweredCurrent}>Submit</button>
+                                                </form>
+                                            )}
+                                            {/* image_choice */}
+                                            {q.type === "image_choice" &&
+                                                q.options.map((option) => (
+                                                    <button
+                                                        key={option.label}
+                                                        className={`option-image-btn ${answers[q.id] === option.label ? "selected" : ""} ${hasAnsweredCurrent ? "answered" : ""}`}
+                                                        disabled={hasAnsweredCurrent}
+                                                        onClick={() => handleSubmitAnswer(q.id, option.label)}
+                                                    >
+                                                        <img src={option.image} alt={option.label} className="option-image" />
+                                                        <span className="option-label">{option.label}</span>
+                                                    </button>
+                                                ))}
+                                        </div>
+                                        {hasAnsweredCurrent && <div className="answer-feedback">Answer locked! Waiting for next question...</div>}
+                                    </main>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* FINISHED SCREEN */}
+                    {quizState.status === "finished" && (
+                        <div className="screen finished-screen">
+                            <div className="card achievement-card">
+                                <h2>🎉 Quiz Finished! 🎉</h2>
+                                <p>Well done, {username || "Participant"}!</p>
+                                <div className="final-score-rank">
+                                    <div className="result-box"><span>Your Score</span><strong>{myScore}</strong></div>
+                                    <div className="result-box"><span>Your Rank</span><strong>{myRank} / {totalParticipants}</strong></div>
+                                </div>
+                                <button className="play-again-btn" onClick={handlePlayAgain}>Play Again</button>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
         </div>
