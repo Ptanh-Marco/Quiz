@@ -1,6 +1,6 @@
 // *** FIX 1: Import useCallback ***
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { db } from "../../config/firebaseConfig";
+import { db } from "src/config/firebaseConfig";
 import { ref, onValue, set, remove, get, update } from "firebase/database";
 import Confetti from "react-confetti";
 import "./AdminPanel.scss";
