@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+// *** FIX 1: Import useCallback ***
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { db } from "src/config/firebaseConfig";
 import { ref, onValue, set, remove, get, update } from "firebase/database";
 import Confetti from "react-confetti";
 import "./AdminPanel.scss";
 import { FaUsers, FaTrophy } from "react-icons/fa";
 
-const QUESTION_TIME_LIMIT = 15;
+const QUESTION_TIME_LIMIT = 10;
 
 // --- UTILITY FUNCTIONS (Unchanged) ---
 function getInitials(name) {
@@ -28,7 +29,6 @@ function getAvatar(name, idx, size = 32) {
 
 // --- MAIN COMPONENT ---
 export default function AdminPanel() {
-    // All state, hooks, and functions are unchanged
     const [participants, setParticipants] = useState([]);
     const [questions, setQuestions] = useState([]);
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -92,35 +92,17 @@ export default function AdminPanel() {
         }
     }, [currentQuestionIndex, started, finished]);
 
-    useEffect(() => {
-        if (started && !finished) {
-            set(ref(db, "quizState/timer"), timer);
-        }
-        if (timer <= 0 && started && !finished) {
-            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-            const handleEndOfQuestion = async () => {
-                await calculateAndStorePointsForCurrentQuestion();
-                goToNextQuestion();
-            };
-            handleEndOfQuestion();
-        }
-    }, [timer, started, finished]);
-
-    const startQuiz = () => set(ref(db, "quizState"), { started: true, currentQuestionIndex: 0, timer: QUESTION_TIME_LIMIT, finished: false });
-    const goToNextQuestion = () => {
+    // *** FIX 2: Memoize functions with useCallback ***
+    const goToNextQuestion = useCallback(() => {
         if (currentQuestionIndex + 1 < questions.length) {
             set(ref(db, "quizState/currentQuestionIndex"), currentQuestionIndex + 1);
         } else {
             set(ref(db, "quizState/finished"), true);
             if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         }
-    };
-    const resetQuiz = () => {
-        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-        set(ref(db, "quizState"), { started: false, finished: false, currentQuestionIndex: 0, timer: QUESTION_TIME_LIMIT });
-        remove(ref(db, "participants")); remove(ref(db, "scores")); remove(ref(db, "quizState/answers"));
-    };
-    const calculateAndStorePointsForCurrentQuestion = async () => {
+    }, [currentQuestionIndex, questions.length]);
+
+    const calculateAndStorePointsForCurrentQuestion = useCallback(async () => {
         if (!questions[currentQuestionIndex]) return;
         const q = questions[currentQuestionIndex];
         const questionId = q.id;
@@ -154,11 +136,34 @@ export default function AdminPanel() {
             }
         });
         if (Object.keys(updates).length > 0) await update(ref(db), updates);
+    }, [currentQuestionIndex, questions]);
+
+    useEffect(() => {
+        if (started && !finished) {
+            set(ref(db, "quizState/timer"), timer);
+        }
+        if (timer <= 0 && started && !finished) {
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+            const handleEndOfQuestion = async () => {
+                await calculateAndStorePointsForCurrentQuestion();
+                goToNextQuestion();
+            };
+            handleEndOfQuestion();
+        }
+        // *** FIX 3: Add the memoized functions to the dependency array ***
+    }, [timer, started, finished, calculateAndStorePointsForCurrentQuestion, goToNextQuestion]);
+
+    const startQuiz = () => set(ref(db, "quizState"), { started: true, currentQuestionIndex: 0, timer: QUESTION_TIME_LIMIT, finished: false });
+
+    const resetQuiz = () => {
+        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        set(ref(db, "quizState"), { started: false, finished: false, currentQuestionIndex: 0, timer: QUESTION_TIME_LIMIT });
+        remove(ref(db, "participants")); remove(ref(db, "scores")); remove(ref(db, "quizState/answers"));
     };
 
     const q = questions[currentQuestionIndex];
 
-    // --- RENDER LOGIC ---
+    // --- RENDER LOGIC (Unchanged) ---
     return (
         <div className="admin-panel-root">
             {finished && <Confetti width={windowSize.width} height={windowSize.height} recycle={false} numberOfPieces={500} gravity={0.15} />}
@@ -180,36 +185,19 @@ export default function AdminPanel() {
                 </section>
             )}
 
-            {/* *** CORRECTED: Quiz in Progress Section - NO ANSWER REVEAL *** */}
             {started && !finished && q && (
                 <section className="admin-card admin-quiz-section">
                     <div className="quiz-progress"><strong>Question {currentQuestionIndex + 1} / {questions.length}</strong></div>
                     <div className="timer">{timer}s</div>
-
                     <div className="quiz-question-area">
                         {q.image && <img className="current-q-img" src={q.image} alt="Question visual" />}
                         <div className="quiz-q-text"><strong>{q.question}</strong></div>
                     </div>
-
                     <div className="admin-options-container">
-                        {q.type === "single_choice" && q.options.map((opt) => (
-                            <div key={opt} className="admin-option-btn">{opt}</div>
-                        ))}
-                        {q.type === "fill_text" && (
-                            <div className="admin-fill-text-display">
-                                <input type="text" placeholder="Participants will type here..." disabled />
-                            </div>
-                        )}
-                        {q.type === "image_choice" && q.options.map((opt) => (
-                            <div key={opt.label} className="admin-option-image-btn">
-                                <img src={opt.image} alt={opt.label} className="admin-option-image" />
-                                <span className="admin-option-label">{opt.label}</span>
-                            </div>
-                        ))}
+                        {q.type === "single_choice" && q.options.map((opt) => (<div key={opt} className="admin-option-btn">{opt}</div>))}
+                        {q.type === "fill_text" && (<div className="admin-fill-text-display"><input type="text" placeholder="Participants will type here..." disabled /></div>)}
+                        {q.type === "image_choice" && q.options.map((opt) => (<div key={opt.label} className="admin-option-image-btn"><img src={opt.image} alt={opt.label} className="admin-option-image" /><span className="admin-option-label">{opt.label}</span></div>))}
                     </div>
-
-                    {/* The answer reveal section has been completely removed from this block */}
-
                 </section>
             )}
 
