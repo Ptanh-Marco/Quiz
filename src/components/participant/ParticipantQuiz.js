@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { db } from "src/config/firebaseConfig";
+// CORRECT
+import { db } from '../../config/firebaseConfig';
 import { ref, onValue, push, set, get } from "firebase/database";
 import Confetti from "react-confetti";
 import "./ParticipantQuiz.scss";
