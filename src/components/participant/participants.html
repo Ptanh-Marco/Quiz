@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Football Fans Quiz (Participant)</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .achievement {
+      margin: 60px auto;
+      padding: 30px 40px;
+      background: #f8fff8;
+      max-width: 400px;
+      box-shadow: 0 0 30px #ccc;
+      border-radius: 12px;
+      text-align: center;
+      font-size: 1.15em;
+    }
+    .achievement h2 { color: #008000; }
+    .achievement .score { font-size: 2em; font-weight: bold; color: #0033cc; }
+    .achievement .meta { margin-top: 10px; color: #666; }
+    .achievement .correct {
+      font-size: 1.3em; font-weight: 600; color: #008000; margin-bottom: 10px;
+    }
+    .options button.selected { box-shadow: 0 0 0 3px #008000; }
+    .current-q-img {max-width:300px;max-height:200px;border-radius:6px;box-shadow:0 2px 10px #aaa;}
+  </style>
+</head>
+<body>
+  <h1>Football Fans Quiz</h1>
+  <div id="start">
+    <input type="text" id="username" placeholder="Enter your name" />
+    <button onclick="joinWaitingRoom()">Join Quiz</button>
+  </div>
+  <div id="waiting" style="display:none;">
+    <div class="waiting">Waiting for admin to start the quiz...</div>
+  </div>
+  <div id="blocked" style="display:none;">
+    <div class="blocked">Quiz has already started. You cannot join now.<br>
+    Please wait for the next round.</div>
+  </div>
+  <div id="quiz"></div>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAcqhxckrckFP_Wi9ey9ceODrfxXTh-H-w",
+      authDomain: "musvn-quizz.firebaseapp.com",
+      databaseURL: "https://musvn-quizz-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "musvn-quizz",
+      storageBucket: "musvn-quizz.appspot.com",
+      messagingSenderId: "38100794938",
+      appId: "1:38100794938:web:ab428f85c021f8c966ff03"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let userName = "";
+    let participantId = null;
+    let questionKeys = [];
+    let questionData = {};
+    let startTime = 0;
+    let currentQuestionIndex = null; // GLOBAL -- only changed in listenQuizState
+    let myScoreKey = null;
+    const QUESTION_TIME_LIMIT = 10;
+    let timerListenerRef = null;
+    let listenQuizStateInitialized = false; // ENSURES ONLY ONE LISTENER
+
+    function calculateScores(questionKeys, questions, allAnswers, participants, QUESTION_TIME_LIMIT = 10) {
+      let participantPoints = {};
+      let perQuestion = {};
+      Object.keys(participants).forEach(pid => {
+        participantPoints[pid] = 0;
+        perQuestion[pid] = [];
+      });
+
+      questionKeys.forEach((qid, qIdx) => {
+        const q = questions[qid];
+        let correctParticipants = [];
+        Object.keys(participants).forEach(pid => {
+          let ansObj = {};
+          if (allAnswers[pid] && allAnswers[pid][qid]) {
+            ansObj = allAnswers[pid][qid];
+          }
+          let isCorrect = false;
+          if (q.type === "fill_text") {
+            let correctArr = Array.isArray(q.correct) ? q.correct : [q.correct];
+            isCorrect = correctArr.some(ans => ans.trim().toLowerCase() === (ansObj.answer||"").trim().toLowerCase());
+          } else {
+            isCorrect = ansObj.answer === q.correct;
+          }
+          if (isCorrect) {
+            correctParticipants.push({
+              pid,
+              timeToAnswer: typeof ansObj.timeToAnswer !== 'undefined' ? ansObj.timeToAnswer : QUESTION_TIME_LIMIT
+            });
+          }
+        });
+        correctParticipants.sort((a, b) => a.timeToAnswer - b.timeToAnswer);
+
+        let N = correctParticipants.length;
+        let S = N * (N + 1) / 2;
+        correctParticipants.forEach((p, i) => {
+          let earned = N > 0 ? Math.round(1000 * (N - i) / S) : 0;
+          participantPoints[p.pid] += earned;
+          perQuestion[p.pid][qIdx] = earned;
+        });
+        Object.keys(participants).forEach(pid => {
+          if (perQuestion[pid][qIdx] === undefined) {
+            perQuestion[pid][qIdx] = 0;
+          }
+        });
+      });
+
+      return {participantPoints, perQuestion};
+    }
+
+    function joinWaitingRoom() {
+      userName = document.getElementById('username').value.trim();
+      if (!userName) {
+        alert("Please enter your name!");
+        return;
+      }
+      db.ref('quizState/started').once('value').then(snapshot => {
+        if (snapshot.val() === true) {
+          document.getElementById('start').style.display = 'none';
+          document.getElementById('blocked').style.display = '';
+          return;
+        } else {
+          document.getElementById('start').style.display = 'none';
+          document.getElementById('waiting').style.display = '';
+          const ref = db.ref('participants').push({name: userName, joined: Date.now()});
+          participantId = ref.key;
+          db.ref('quizState').on('value', snapshot => {
+            const state = snapshot.val();
+            if (state && state.started === true) {
+              document.getElementById('waiting').style.display = 'none';
+              startQuiz();
+            }
+          });
+        }
+      });
+    }
+
+    function startQuiz() {
+      startTime = Date.now();
+      db.ref('questions').once('value').then(snapshot => {
+        questionData = snapshot.val();
+        questionKeys = Object.keys(questionData);
+        db.ref('quizState').once('value').then(snap => {
+          // Do NOT call showQuestion here. Only listen once:
+          if (!listenQuizStateInitialized) {
+            listenQuizStateInitialized = true;
+            listenQuizState();
+          }
+        });
+      });
+    }
+
+    function listenQuizState() {
+      db.ref('quizState').on('value', snapshot => {
+        const state = snapshot.val();
+        if (!state || !state.started) return;
+        let newIndex = typeof state.currentQuestionIndex !== "undefined" ? state.currentQuestionIndex : 0;
+        // Only render if question index changes (including first load)
+        if (currentQuestionIndex === null || currentQuestionIndex !== newIndex) {
+          console.log("showQuestion() called: index changed from", currentQuestionIndex, "to", newIndex);
+          currentQuestionIndex = newIndex;
+          showQuestion();
+        }
+        // If same index, do nothing!
+      });
+    }
+
+    function clearTimerListener() {
+      if (timerListenerRef) {
+        timerListenerRef.off();
+        timerListenerRef = null;
+      }
+    }
+
+    function showQuestion() {
+      console.log("Rendering question index:", currentQuestionIndex);
+      clearTimerListener();
+      if (currentQuestionIndex === null || currentQuestionIndex >= questionKeys.length) {
+        finishQuiz();
+        return;
+      }
+      const qid = questionKeys[currentQuestionIndex];
+      const q = questionData[qid];
+      const quizDiv = document.getElementById('quiz');
+      quizDiv.innerHTML = `<div class="timer" id="timer"></div>`;
+
+      if (q.image) {
+        quizDiv.innerHTML += `<div><img class="current-q-img" src="${q.image}"></div>`;
+      }
+
+      quizDiv.innerHTML += `<div class="question"><strong>${q.question}</strong></div>`;
+
+      let answerArea = document.createElement('div');
+      answerArea.className = 'options';
+      quizDiv.appendChild(answerArea);
+
+      let selectedAnswer = null;
+      let alreadyAnswered = false;
+      let timeIsUp = false;
+      let isAnswerRendered = false;
+      let fillTextValue = "";
+      let hasFetchedAnswer = false;
+
+      function getCurrentInputValue() {
+        const input = document.querySelector('.options input[type="text"]');
+        if (input) return input.value;
+        return fillTextValue;
+      }
+
+      function fetchAndRenderAnswer() {
+        if (hasFetchedAnswer) return;
+        hasFetchedAnswer = true;
+        db.ref(`quizState/answers/${participantId}/${qid}`).once('value').then(ansSnap => {
+          const ansVal = ansSnap.val();
+          if (ansVal && ansVal.answer) {
+            selectedAnswer = ansVal.answer;
+            alreadyAnswered = true;
+            fillTextValue = selectedAnswer;
+          }
+          renderAnswerUI(); // initial render only
+        });
+      }
+
+      fetchAndRenderAnswer();
+
+      function renderAnswerUI(forceRender = false) {
+        if (isAnswerRendered && !forceRender) return;
+        isAnswerRendered = true;
+        fillTextValue = getCurrentInputValue();
+        answerArea.innerHTML = "";
+        if (q.type === "single_choice") {
+          q.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.textContent = opt;
+            if (selectedAnswer === opt) btn.classList.add('selected');
+            btn.disabled = timeIsUp || alreadyAnswered;
+            btn.onclick = () => {
+              if (timeIsUp || alreadyAnswered) return;
+              submitAnswer(qid, opt);
+            };
+            answerArea.appendChild(btn);
+          });
+        } else if (q.type === "image_choice") {
+          q.options.forEach(opt => {
+            const btn = document.createElement('button');
+            btn.style.display = "inline-block";
+            btn.style.margin = "6px";
+            btn.style.padding = "0";
+            btn.style.border = "none";
+            btn.style.background = "none";
+            btn.disabled = timeIsUp || alreadyAnswered;
+
+            if (selectedAnswer === opt.label) btn.classList.add('selected');
+
+            btn.onclick = () => {
+              if (timeIsUp || alreadyAnswered) return;
+              submitAnswer(qid, opt.label);
+            };
+
+            const img = document.createElement('img');
+            img.src = opt.image;
+            img.alt = opt.label;
+            img.style.width = "120px";
+            img.style.height = "120px";
+            img.style.objectFit = "cover";
+            img.style.borderRadius = "10px";
+            img.style.display = "block";
+
+            const cap = document.createElement('div');
+            cap.textContent = opt.label;
+            cap.style.textAlign = "center";
+            cap.style.marginTop = "6px";
+            cap.style.fontSize = "0.95em";
+
+            btn.appendChild(img);
+            btn.appendChild(cap);
+            answerArea.appendChild(btn);
+          });
+        } else if (q.type === "fill_text") {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.placeholder = 'Your answer here';
+          input.value = fillTextValue;
+          input.disabled = timeIsUp || alreadyAnswered;
+
+          input.addEventListener('input', function() {
+            fillTextValue = input.value;
+          });
+
+          answerArea.appendChild(input);
+
+          const btn = document.createElement('button');
+          btn.textContent = "Submit";
+          btn.disabled = timeIsUp || alreadyAnswered;
+          btn.onclick = () => {
+            if (timeIsUp || alreadyAnswered) return;
+            submitAnswer(qid, fillTextValue);
+          };
+          answerArea.appendChild(btn);
+
+          setTimeout(function() {
+            if (!input.disabled) input.focus();
+          }, 0);
+        }
+      }
+
+      function submitAnswer(qid, answer) {
+        if (alreadyAnswered) return;
+        alreadyAnswered = true;
+        selectedAnswer = answer;
+        fillTextValue = answer;
+        const timerText = document.getElementById('timer').textContent;
+        let match = timerText.match(/(\d+)/);
+        let currentTimerValue = match ? parseInt(match[1]) : 0;
+        let timeToAnswer = QUESTION_TIME_LIMIT - currentTimerValue;
+
+        db.ref(`quizState/answers/${participantId}/${qid}`).set({
+          answer: answer,
+          answeredAt: Date.now(),
+          timeToAnswer: timeToAnswer
+        });
+        isAnswerRendered = false; // allow re-render to disable controls
+        renderAnswerUI(true);
+      }
+
+      timerListenerRef = db.ref('quizState/timer');
+      timerListenerRef.on('value', snap => {
+        let timeLeft = snap.val() || QUESTION_TIME_LIMIT;
+        document.getElementById('timer').textContent = `Time left: ${timeLeft}s`;
+        if (timeLeft <= 0 && !timeIsUp) {
+          timeIsUp = true;
+          isAnswerRendered = false; // allow re-render for disabling controls
+          renderAnswerUI(true);     // force re-render when time is up
+        }
+        // No re-render if timeLeft > 0
+      });
+    }
+
+    function finishQuiz() {
+      clearTimerListener();
+      db.ref('quizState').off();
+
+      db.ref('quizState/answers').once('value').then(allAnsSnap => {
+        const allAnswers = allAnsSnap.val() || {};
+        db.ref('questions').once('value').then(qSnap => {
+          const questions = qSnap.val();
+          db.ref('participants').once('value').then(partSnap => {
+            const participants = partSnap.val() || {};
+            const {participantPoints, perQuestion} = calculateScores(questionKeys, questions, allAnswers, participants, QUESTION_TIME_LIMIT);
+
+            let myScore = participantPoints[participantId] || 0;
+            let myCorrectCount = perQuestion[participantId].filter(x => x > 0).length;
+            let perQuestionScore = perQuestion[participantId];
+
+            let achievementHtml = `<div class="achievement">
+              <h2>🎉 Achievement Unlocked!</h2>
+              <div><strong>Participant:</strong> ${userName}</div>
+              <div class="correct">Correct Answers: ${myCorrectCount} / ${questionKeys.length}</div>
+              <div class="score">${myScore} Points</div>
+              <div class="meta">Per Question: ${perQuestionScore.map((score, idx) => `Q${idx+1}: ${score}`).join(", ")}</div>
+              <div class="meta">Time: ${( (Date.now() - startTime)/1000 ).toFixed(1)} seconds</div>
+            </div>`;
+            document.getElementById('quiz').innerHTML = achievementHtml;
+
+            const scoreRef = db.ref('scores').push();
+            myScoreKey = scoreRef.key;
+            scoreRef.set({
+              name: userName,
+              score: myScore,
+              correct: myCorrectCount,
+              total: questionKeys.length,
+              duration: ((Date.now() - startTime)/1000),
+              achievement: {
+                points: myScore,
+                correctCount: myCorrectCount,
+                perQuestionScore: perQuestionScore
+              },
+              timestamp: Date.now()
+            });
+          });
+        });
+      });
+    }
+  </script>
+</body>
+</html>

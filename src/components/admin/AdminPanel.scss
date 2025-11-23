@@ -1,0 +1,219 @@
+/* --- Root Styles & Header --- */
+.admin-panel-root {
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #f0f4f8;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  h1 {
+    margin: 0;
+    font-size: 1.5em;
+    color: #1b2e4b;
+  }
+}
+
+.admin-header-btns {
+  display: flex;
+  gap: 10px;
+}
+
+.admin-btn {
+  padding: 10px 20px;
+  font-size: 1em;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background-color: #4a90e2;
+  color: white;
+  transition: background-color 0.2s;
+  &:hover {
+    background-color: #357abd;
+  }
+  &.reset {
+    background-color: #d9534f;
+    &:hover {
+      background-color: #c9302c;
+    }
+  }
+}
+
+/* --- Card & Table Styles --- */
+.admin-card {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+  h2 {
+    margin-top: 0;
+    color: #1b2e4b;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+  }
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  th {
+    font-weight: 600;
+    color: #555;
+  }
+}
+.avatar-circle {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  text-align: center;
+  line-height: 32px;
+  font-weight: bold;
+  color: white;
+}
+
+/* --- Quiz in Progress Section --- */
+.admin-quiz-section {
+  .quiz-progress {
+    font-size: 1.1em;
+    color: #555;
+    margin-bottom: 10px;
+  }
+  .timer {
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #4a90e2;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+
+  .quiz-question-area {
+    text-align: center;
+    margin-bottom: 25px;
+  }
+
+  .current-q-img {
+    max-width: 100%;
+    max-height: 300px;
+    height: auto;
+    border-radius: 8px;
+    margin: 0 auto 20px auto;
+    display: block;
+    object-fit: contain;
+  }
+
+  .quiz-q-text {
+    font-size: 1.4em;
+    font-weight: 500;
+    color: #333;
+  }
+  
+  .admin-options-container {
+    margin-top: 25px;
+    display: grid;
+    gap: 15px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .admin-option-btn {
+    padding: 15px;
+    font-size: 1em;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fdfdfd;
+    color: #333;
+    text-align: center;
+  }
+  
+  .admin-fill-text-display {
+    grid-column: 1 / -1;
+    input {
+      width: 100%;
+      padding: 14px;
+      border: 2px dashed #ddd;
+      border-radius: 8px;
+      font-size: 1em;
+      text-align: center;
+      background-color: #f9f9f9;
+      cursor: not-allowed;
+    }
+  }
+
+  .admin-option-image-btn {
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    background: #fdfdfd;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .admin-option-image {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 6px;
+  }
+
+  .admin-option-label {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: #444;
+  }
+}
+
+@media (min-width: 768px) {
+  .admin-quiz-section .admin-options-container {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .admin-quiz-section .admin-options-container .admin-option-btn {
+    grid-column: span 2;
+  }
+}
+
+/* --- Leaderboard & Podium --- */
+.podium-wrapper {
+  padding: 20px 0;
+}
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 10px;
+}
+.podium-col {
+  text-align: center;
+  width: 120px;
+}
+.podium-avatar {
+  margin: 10px auto;
+}
+.podium-name {
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.podium-points {
+  color: #555;
+  font-size: 0.9em;
+}
+.podium-medal {
+  font-size: 2.5em;
+}
+.podium-gold { order: 2; }
+.podium-silver { order: 1; }
+.podium-bronze { order: 3; }
