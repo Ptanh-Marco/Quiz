@@ -1,17 +1,141 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { db } from '../../config/firebaseConfig';
-import { ref, onValue, set, remove, get, update } from "firebase/database";
+import { ref, onValue, set, remove, get, update, off } from "firebase/database";
 import Confetti from "react-confetti";
+import { QRCodeSVG } from "qrcode.react";
 import "./AdminPanel.scss";
-
-import ParticipantList from './ParticipantList';
 import LiveQuestionView from './LiveQuestionView';
-import Leaderboard from './Leaderboard';
+
+// Helper: generate roomId
+function generateRoomId(length = 7) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+// ----------- Sub-components -----------
+
+function AdminHeader({ title, roomCode, onStart, onReset, quizStarted }) {
+    return (
+        <header className="led-header">
+            <div className="led-title">{title}</div>
+            <div className="led-roomcode">Room: <span>{roomCode}</span></div>
+            <div className="led-controls">
+                {!quizStarted && <button className="led-btn start-btn" onClick={onStart}>Start Quiz</button>}
+                <button className="led-btn reset-btn" onClick={onReset}>Reset</button>
+            </div>
+        </header>
+    );
+}
+
+function RoomInfo({ roomCode, participantURL }) {
+    return (
+        <section className="led-roominfo">
+            <div className="led-qr-sec">
+                <QRCodeSVG value={participantURL} size={240} />
+            </div>
+            <div className="led-room-details">
+                <div className="led-roomid-value">Room Code: <span>{roomCode}</span></div>
+                <div className="led-url">{participantURL}</div>
+                <div className="led-instruction">Scan QR code or enter URL to join!</div>
+            </div>
+        </section>
+    );
+}
+
+function ParticipantGrid({ participants }) {
+    return (
+        <section className="led-participants">
+            <h2 className="led-section-title">Participants Waiting</h2>
+            <div className="led-participant-list">
+                {participants.length === 0 && <div className="led-nobody">No one yet...</div>}
+                {participants.map(p => (
+                    <div className="led-participant-name" key={p.pid}>{p.name}</div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function LiveQuestionDisplay({ question, timer, questionNumber, totalQuestions, answers, participants }) {
+    return (
+        <section className="led-question">
+            <div className="led-question-number">
+                Question {questionNumber} / {totalQuestions}
+            </div>
+            <div className="led-timer">
+                Time Left: <span className={timer <= 5 ? "led-timer-low" : ""}>{timer}</span>s
+            </div>
+            <div className="led-question-text">{question.question}</div>
+            {question.image && (
+                <img className="led-question-image" src={question.image} alt="Question" />
+            )}
+            {/* --- Display Answers --- */}
+            <div className="led-answers">
+                <h3 style={{
+                    fontSize: "1.5rem",
+                    color: "#00695c",
+                    margin: "28px 0 10px 0",
+                    fontWeight: "700"
+                }}>Participant Answers:</h3>
+                <div className="led-answers-list">
+                    {answers.length === 0 && (
+                        <div style={{ color: "#aaa", fontSize: "1.2rem" }}>No answers yet.</div>
+                    )}
+                    {answers.map(a => (
+                        <div className="led-answer-row" key={a.pid}>
+                            <span className="led-answer-name">{participants.find(p => p.pid === a.pid)?.name || "?"}</span>
+                            <span className="led-answer-text">{a.answer}</span>
+                            <span className="led-answer-time">{a.timeToAnswer !== undefined ? `${a.timeToAnswer}s` : ""}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    );
+}
+
+function LeaderboardDisplay({ leaderboard }) {
+    return (
+        <section className="led-leaderboard">
+            <h2 className="led-section-title">🏆 Final Leaderboard 🏆</h2>
+            <div className="led-leaderboard-list">
+                {leaderboard.map((item, idx) => (
+                    <div
+                        className={`led-leaderboard-row ${idx === 0 ? "led-winner" : ""}`}
+                        key={item.pid}
+                    >
+                        <span className="led-leaderboard-rank">{idx + 1}</span>
+                        <span className="led-leaderboard-name">{item.name}</span>
+                        <span className="led-leaderboard-score">{item.points}</span>
+                    </div>
+                ))}
+            </div>
+            <div className="led-congrats">Congratulations!</div>
+        </section>
+    );
+}
+
+function AdminFooter({ eventLogo, sponsorLogo }) {
+    return (
+        <footer className="led-footer">
+            {eventLogo && <img src={eventLogo} alt="Event Logo" className="led-footer-logo" />}
+            {sponsorLogo && <img src={sponsorLogo} alt="Sponsor Logo" className="led-footer-sponsor" />}
+        </footer>
+    );
+}
+
+// ----------- Main AdminPanel -----------
 
 const QUESTION_TIME_LIMIT = 10;
 
 export default function AdminPanel() {
     // --- STATE ---
+    const [roomId, setRoomId] = useState("");
+    const [roomCreated, setRoomCreated] = useState(false);
     const [participants, setParticipants] = useState([]);
     const [questions, setQuestions] = useState([]);
     const [leaderboard, setLeaderboard] = useState([]);
@@ -25,29 +149,36 @@ export default function AdminPanel() {
         width: window.innerWidth,
         height: window.innerHeight
     });
+    const [currentAnswers, setCurrentAnswers] = useState([]);
 
+    // For time/logic
     const isProcessingRef = useRef(false);
     const quizStateRef = useRef(quizState);
-
     useEffect(() => { quizStateRef.current = quizState; }, [quizState]);
 
+    // --- Load questions ---
     useEffect(() => {
-        const participantsRef = ref(db, "participants");
         const questionsRef = ref(db, "questions");
-        const quizStateDbRef = ref(db, "quizState");
-        const scoresRef = ref(db, "scores");
-
-        const unsubParticipants = onValue(participantsRef, snap =>
-            setParticipants(Object.values(snap.val() || {}))
-        );
         const unsubQuestions = onValue(questionsRef, snap => {
             const qObj = snap.val();
-            // Convert object to array with id property
-            setQuestions(qObj
-                ? Object.entries(qObj).map(([id, q]) => ({ ...q, id }))
-                : []
+            setQuestions(
+                qObj
+                    ? Object.entries(qObj).map(([id, q]) => ({ ...q, id }))
+                    : []
             );
         });
+        return () => unsubQuestions();
+    }, []);
+
+    // --- Listen for participants, quizState, scores for the current room ---
+    useEffect(() => {
+        if (!roomCreated || !roomId) return;
+        const participantsRef = ref(db, `rooms/${roomId}/participants`);
+        const quizStateDbRef = ref(db, `rooms/${roomId}/quizState`);
+        const scoresRef = ref(db, `rooms/${roomId}/scores`);
+        const unsubParticipants = onValue(participantsRef, snap =>
+            setParticipants(Object.entries(snap.val() || {}).map(([pid, v]) => ({ pid, ...v }))
+        ));
         const unsubQuizState = onValue(quizStateDbRef, snap => {
             setQuizState(
                 snap.val() || {
@@ -65,39 +196,68 @@ export default function AdminPanel() {
             const board = Object.keys(scores)
                 .map(pid => ({
                     name: participantsObj[pid]?.name || "Unknown",
-                    points: Object.values(scores[pid]?.perQuestion || {}).reduce(
-                        (a, b) => a + b, 0
-                    ),
+                    points: Object.values(scores[pid]?.perQuestion || {}).reduce((a, b) => a + b, 0),
                     pid
                 }))
                 .sort((a, b) => b.points - a.points);
             setLeaderboard(board);
         });
-
         return () => {
-            unsubParticipants();
-            unsubQuestions();
-            unsubQuizState();
-            unsubScores();
+            off(participantsRef);
+            off(quizStateDbRef);
+            off(scoresRef);
         };
-    }, []);
+    }, [roomId, roomCreated]);
 
-    // SCORING & QUESTION SEQUENCING LOGIC
+    // --- Answers for current question ---
+    useEffect(() => {
+        if (!roomCreated || !roomId || !quizState.started) {
+            setCurrentAnswers([]);
+            return;
+        }
+        const q = questions[quizState.currentQuestionIndex];
+        if (!q?.id) return;
+        const answersRef = ref(db, `rooms/${roomId}/quizState/answers`);
+        const unsubAnswers = onValue(answersRef, (snap) => {
+            const allAnswers = snap.val() || {};
+            // Map answer objects for the current question
+            const answerList = Object.entries(allAnswers).map(([pid, answerObj]) => ({
+                pid,
+                answer: answerObj[q.id]?.answer,
+                timeToAnswer: answerObj[q.id]?.timeToAnswer
+            })).filter(a => a.answer !== undefined);
+            setCurrentAnswers(answerList);
+        });
+        return () => unsubAnswers();
+    }, [roomId, roomCreated, quizState.started, quizState.currentQuestionIndex, questions]);
+
+    // --- Master Clock ---
+    useEffect(() => {
+        if (!quizState.started || quizState.finished) return;
+        if (quizState.timer <= 0) {
+            handleEndOfQuestion();
+            return;
+        }
+        const timerId = setInterval(() => {
+            const newTime = quizStateRef.current.timer - 1;
+            set(ref(db, `rooms/${roomId}/quizState/timer`), newTime);
+        }, 1000);
+        return () => clearInterval(timerId);
+    }, [quizState.started, quizState.finished, quizState.timer, roomId]);
+
+    // --- Scoring & Question Logic ---
     const handleEndOfQuestion = useCallback(async () => {
         if (isProcessingRef.current) return;
         isProcessingRef.current = true;
-
         const questionIndexToProcess = quizStateRef.current.currentQuestionIndex;
         const q = questions[questionIndexToProcess];
         const qid = q?.id;
-
         try {
             if (q && qid) {
-                const allAnswersSnap = await get(ref(db, `quizState/answers`));
+                const allAnswersSnap = await get(ref(db, `rooms/${roomId}/quizState/answers`));
                 const allAnswers = allAnswersSnap.val() || {};
-                const participantsSnap = await get(ref(db, "participants"));
+                const participantsSnap = await get(ref(db, `rooms/${roomId}/participants`));
                 const participantsObj = participantsSnap.val() || {};
-
                 const correctParticipants = Object.keys(participantsObj)
                     .map(pid => {
                         const ansObj = allAnswers[pid]?.[qid] || {};
@@ -121,60 +281,39 @@ export default function AdminPanel() {
                             : null;
                     })
                     .filter(Boolean);
-
-                correctParticipants.sort(
-                    (a, b) => a.timeToAnswer - b.timeToAnswer
-                );
-
+                correctParticipants.sort((a, b) => a.timeToAnswer - b.timeToAnswer);
                 const N = correctParticipants.length;
                 const S = N > 0 ? (N * (N + 1)) / 2 : 1;
                 const updates = {};
                 correctParticipants.forEach((p, i) => {
-                    updates[`scores/${p.pid}/perQuestion/${questionIndexToProcess}`] =
+                    updates[`rooms/${roomId}/scores/${p.pid}/perQuestion/${questionIndexToProcess}`] =
                         Math.round((1000 * (N - i)) / S);
                 });
-
                 if (Object.keys(updates).length > 0) await update(ref(db), updates);
             }
-
             const nextIndex = questionIndexToProcess + 1;
             if (nextIndex < questions.length) {
-                set(ref(db, "quizState"), {
+                set(ref(db, `rooms/${roomId}/quizState`), {
                     ...quizStateRef.current,
                     currentQuestionIndex: nextIndex,
                     timer: QUESTION_TIME_LIMIT
                 });
             } else {
-                set(ref(db, "quizState/finished"), true);
+                set(ref(db, `rooms/${roomId}/quizState/finished`), true);
             }
         } catch (error) {
             console.error("Error processing end of question:", error);
         } finally {
             isProcessingRef.current = false;
         }
-    }, [questions]);
+    }, [questions, roomId]);
 
-    // THE MASTER CLOCK
-    useEffect(() => {
-        if (!quizState.started || quizState.finished) return;
-        if (quizState.timer <= 0) {
-            handleEndOfQuestion();
-            return;
-        }
-        const timerId = setInterval(() => {
-            const newTime = quizStateRef.current.timer - 1;
-            set(ref(db, "quizState/timer"), newTime);
-        }, 1000);
-        return () => clearInterval(timerId);
-    }, [quizState.started, quizState.finished, quizState.timer, handleEndOfQuestion]);
-
-    // ENHANCED START QUIZ
+    // --- Start Quiz ---
     const startQuiz = async () => {
         if (questions.length === 0) {
             alert("Cannot start quiz with no questions.");
             return;
         }
-
         const quizStartTime = Date.now();
         const initialQuizState = {
             started: true,
@@ -183,26 +322,14 @@ export default function AdminPanel() {
             timer: QUESTION_TIME_LIMIT,
             startTime: quizStartTime,
         };
-
         await Promise.all([
-            set(ref(db, "quizState"), initialQuizState),
-            remove(ref(db, "scores")),
-            remove(ref(db, "quizState/answers"))
+            set(ref(db, `rooms/${roomId}/quizState`), initialQuizState),
+            remove(ref(db, `rooms/${roomId}/scores`)),
+            remove(ref(db, `rooms/${roomId}/quizState/answers`))
         ]);
-
-        // Remove any participants who joined at or after quizStartTime
-        const participantsRef = ref(db, "participants");
-        const participantsSnap = await get(participantsRef);
-        const participantsObj = participantsSnap.val() || {};
-        const notWaitingPids = Object.keys(participantsObj).filter(
-            pid => !participantsObj[pid].joined || participantsObj[pid].joined >= quizStartTime
-        );
-        for (const pid of notWaitingPids) {
-            await remove(ref(db, `participants/${pid}`));
-        }
     };
 
-    // RESET QUIZ
+    // --- Reset Quiz ---
     const resetQuiz = async () => {
         if (
             window.confirm(
@@ -216,15 +343,12 @@ export default function AdminPanel() {
                     currentQuestionIndex: 0,
                     timer: QUESTION_TIME_LIMIT
                 };
-
                 await Promise.all([
-                    set(ref(db, "quizState"), initialQuizState),
-                    remove(ref(db, "participants")),
-                    remove(ref(db, "scores")),
-                    remove(ref(db, "quizState/answers"))
+                    set(ref(db, `rooms/${roomId}/quizState`), initialQuizState),
+                    remove(ref(db, `rooms/${roomId}/participants`)),
+                    remove(ref(db, `rooms/${roomId}/scores`)),
+                    remove(ref(db, `rooms/${roomId}/quizState/answers`))
                 ]);
-
-                console.log("Quiz and participants have been reset successfully.");
             } catch (error) {
                 console.error("Failed to reset quiz:", error);
                 alert(
@@ -233,8 +357,6 @@ export default function AdminPanel() {
             }
         }
     };
-
-    const currentQuestion = questions[quizState.currentQuestionIndex];
 
     useEffect(() => {
         const handleResize = () =>
@@ -246,31 +368,65 @@ export default function AdminPanel() {
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
+    // --- Room Creation UI ---
+    if (!roomCreated) {
+        return (
+            <div className="led-admin-root">
+                <AdminHeader
+                    title="Football Fans Quiz"
+                    roomCode="---"
+                    onStart={() => {}} // Disabled
+                    onReset={() => {}} // Disabled
+                    quizStarted={false}
+                />
+                <section className="led-roominfo">
+                    <button className="led-btn start-btn"
+                        style={{ fontSize: "2.2rem", padding: "1em 2em", marginTop: "60px" }}
+                        onClick={async () => {
+                            const newRoomId = generateRoomId();
+                            setRoomId(newRoomId);
+                            await set(ref(db, `rooms/${newRoomId}`), {
+                                created: Date.now(),
+                                status: "waiting"
+                            });
+                            setRoomCreated(true);
+                        }}>
+                        Generate Room
+                    </button>
+                </section>
+            </div>
+        );
+    }
+
+    // --- Main LED Structure ---
+    const participantURL = `${window.location.origin}/#/participant?roomId=${roomId}`;
+    const currentQuestion = questions[quizState.currentQuestionIndex];
+
     return (
-        <div className="admin-panel-root">
+        <div className="led-admin-root">
             {quizState.finished && (
                 <Confetti
                     width={windowSize.width}
                     height={windowSize.height}
                     recycle={false}
-                    numberOfPieces={500}
+                    numberOfPieces={800}
                 />
             )}
-            <header className="admin-header">
-                <h1>👑 Admin Panel</h1>
-                <div className="admin-header-btns">
-                    {!quizState.started && (
-                        <button className="admin-btn" onClick={startQuiz}>
-                            Start Quiz
-                        </button>
-                    )}
-                    <button className="admin-btn reset" onClick={resetQuiz}>
-                        Reset Quiz
-                    </button>
-                </div>
-            </header>
+            <AdminHeader
+                title="Football Fans Quiz"
+                roomCode={roomId}
+                onStart={startQuiz}
+                onReset={resetQuiz}
+                quizStarted={quizState.started}
+            />
             {!quizState.started && (
-                <ParticipantList participants={participants} />
+                <>
+                    <RoomInfo
+                        roomCode={roomId}
+                        participantURL={participantURL}
+                    />
+                    <ParticipantGrid participants={participants} />
+                </>
             )}
             {quizState.started && !quizState.finished && currentQuestion && (
                 <LiveQuestionView
@@ -278,12 +434,14 @@ export default function AdminPanel() {
                     timer={quizState.timer}
                     currentQuestionIndex={quizState.currentQuestionIndex}
                     totalQuestions={questions.length}
+                    answers={currentAnswers}
+                    participants={participants}
                 />
             )}
-            <Leaderboard
-                leaderboard={leaderboard}
-                finished={quizState.finished}
-            />
+            {quizState.finished && (
+                <LeaderboardDisplay leaderboard={leaderboard} />
+            )}
+            <AdminFooter eventLogo={null} sponsorLogo={null} />
         </div>
     );
 }

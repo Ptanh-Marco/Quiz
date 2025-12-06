@@ -2,14 +2,30 @@ import React, { useState, useEffect } from "react";
 import { db } from '../../config/firebaseConfig';
 import { ref, onValue, push, set, get, remove } from "firebase/database";
 import Confetti from "react-confetti";
+import { useLocation, useParams } from "react-router-dom";
 import "./ParticipantQuiz.scss";
 
 const QUESTION_TIME_LIMIT = 15;
 
+// Helper: get roomId from query or path param
+function useRoomId() {
+    const location = useLocation();
+    const params = useParams();
+    const searchParams = new URLSearchParams(location.search);
+    const queryRoomId = searchParams.get("roomId");
+    const pathRoomId = params.roomId;
+    return queryRoomId || pathRoomId || "";
+}
+
 export default function ParticipantQuiz() {
+    // --- GET ROOM ID ---
+    const roomId = useRoomId();
+
     // --- STATE MANAGEMENT ---
     const [username, setUsername] = useState("");
-    const [participantId, setParticipantId] = useState(sessionStorage.getItem("participantId"));
+    const [participantId, setParticipantId] = useState(
+        sessionStorage.getItem(`participantId_${roomId}`)
+    );
     const [quizState, setQuizState] = useState({
         status: participantId ? "waiting" : "joining",
         currentQuestionIndex: 0,
@@ -29,20 +45,21 @@ export default function ParticipantQuiz() {
             alert("Please enter your name!");
             return;
         }
-        const quizStateSnap = await get(ref(db, "quizState/started"));
+        // Check if quiz already started for this room
+        const quizStateSnap = await get(ref(db, `rooms/${roomId}/quizState/started`));
         if (quizStateSnap.val() === true) {
             setBlocked(true);
             return;
         }
-        const pRef = push(ref(db, "participants"));
+        const pRef = push(ref(db, `rooms/${roomId}/participants`));
         set(pRef, { name: username, joined: Date.now() });
         setParticipantId(pRef.key);
-        sessionStorage.setItem("participantId", pRef.key);
+        sessionStorage.setItem(`participantId_${roomId}`, pRef.key);
         setQuizState((prev) => ({ ...prev, status: "waiting" }));
     };
 
     const handlePlayAgain = () => {
-        sessionStorage.removeItem("participantId");
+        sessionStorage.removeItem(`participantId_${roomId}`);
         setParticipantId(null);
         setUsername("");
         setAnswers({});
@@ -52,9 +69,10 @@ export default function ParticipantQuiz() {
         setBlocked(false);
     };
 
-    // --- ENHANCED: Listen for quizState changes and checkpoint participant status ---
+    // --- Listen for quizState changes and checkpoint participant status ---
     useEffect(() => {
-        const quizStateRef = ref(db, "quizState");
+        if (!roomId) return;
+        const quizStateRef = ref(db, `rooms/${roomId}/quizState`);
         const unsubscribe = onValue(quizStateRef, (snap) => {
             const state = snap.val() || {};
             if (state.finished) {
@@ -63,7 +81,7 @@ export default function ParticipantQuiz() {
                 // Only play if still in participants node
                 if (participantId) {
                     const checkParticipant = async () => {
-                        const pSnap = await get(ref(db, `participants/${participantId}`));
+                        const pSnap = await get(ref(db, `rooms/${roomId}/participants/${participantId}`));
                         if (pSnap.exists()) {
                             setQuizState((prev) => ({
                                 ...prev,
@@ -86,23 +104,23 @@ export default function ParticipantQuiz() {
             }
         });
         return () => unsubscribe();
-    }, [quizState.status, participantId]);
+    }, [quizState.status, participantId, roomId]);
 
     // --- Listen for participant deletion (if admin removes late joiners) ---
     useEffect(() => {
-        if (!participantId) return;
-        const participantRef = ref(db, `participants/${participantId}`);
+        if (!participantId || !roomId) return;
+        const participantRef = ref(db, `rooms/${roomId}/participants/${participantId}`);
         const unsubscribe = onValue(participantRef, (snap) => {
             if (!snap.exists()) {
                 handlePlayAgain();
             }
         });
         return () => unsubscribe();
-    }, [participantId]);
+    }, [participantId, roomId]);
 
     // --- Listen for questions when playing ---
     useEffect(() => {
-        if (quizState.status === "playing") {
+        if (quizState.status === "playing" && roomId) {
             const questionsRef = ref(db, "questions");
             const unsubscribe = onValue(questionsRef, (snap) => {
                 const qObj = snap.val();
@@ -110,17 +128,18 @@ export default function ParticipantQuiz() {
             });
             return () => unsubscribe();
         }
-    }, [quizState.status]);
+    }, [quizState.status, roomId]);
+
     // --- LISTEN FOR SCORES AND RANK ---
     useEffect(() => {
-        if (!participantId) return;
-        const myScoreRef = ref(db, `scores/${participantId}/perQuestion`);
+        if (!participantId || !roomId) return;
+        const myScoreRef = ref(db, `rooms/${roomId}/scores/${participantId}/perQuestion`);
         const unsubMyScore = onValue(myScoreRef, (snap) => {
             const myQuestionScores = snap.val() || {};
             const total = Object.values(myQuestionScores).reduce((a, b) => a + b, 0);
             setMyScore(total);
         });
-        const allScoresRef = ref(db, "scores");
+        const allScoresRef = ref(db, `rooms/${roomId}/scores`);
         const unsubAllScores = onValue(allScoresRef, (snap) => {
             const allScores = snap.val() || {};
             setTotalParticipants(Object.keys(allScores).length);
@@ -136,7 +155,7 @@ export default function ParticipantQuiz() {
             unsubMyScore();
             unsubAllScores();
         };
-    }, [participantId]);
+    }, [participantId, roomId]);
 
     // --- WINDOW RESIZE HANDLER ---
     useEffect(() => {
@@ -148,7 +167,7 @@ export default function ParticipantQuiz() {
     // --- SUBMIT ANSWER LOGIC ---
     const handleSubmitAnswer = (questionId, answer) => {
         if (!participantId || answers[questionId]) return;
-        set(ref(db, `quizState/answers/${participantId}/${questionId}`), {
+        set(ref(db, `rooms/${roomId}/quizState/answers/${participantId}/${questionId}`), {
             answer: answer,
             answeredAt: Date.now(),
             timeToAnswer: QUESTION_TIME_LIMIT - quizState.timer,

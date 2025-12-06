@@ -1,333 +1,406 @@
-/* --- Root Styles & Header --- */
+/* Root styles */
+.led-admin-root,
 .admin-panel-root {
-  font-family: 'Segoe UI', sans-serif;
-  background-color: #f0f4f8;
-  padding: 20px;
-  min-height: 100vh;
+    background: #fff;
+    color: #222;
+    font-family: 'Montserrat', 'Segoe UI', 'Arial', sans-serif;
+    min-height: 100vh;
+    padding: 32px 5vw;
 }
 
-.admin-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  h1 {
-    margin: 0;
-    font-size: 1.5em;
-    color: #1b2e4b;
-  }
-}
-
-.admin-header-btns {
-  display: flex;
-  gap: 10px;
-}
-
-.admin-btn {
-  padding: 10px 20px;
-  font-size: 1em;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  background-color: #4a90e2;
-  color: white;
-  transition: background-color 0.2s;
-  &:hover {
-    background-color: #357abd;
-  }
-  &.reset {
-    background-color: #d9534f;
-    &:hover {
-      background-color: #c9302c;
-    }
-  }
-}
-
-/* --- Card & Table Styles --- */
-.admin-card {
-  background: white;
-  padding: 25px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  margin-bottom: 20px;
-  h2 {
-    margin-top: 0;
-    color: #1b2e4b;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
-    margin-bottom: 15px;
-  }
-}
-
-.admin-table {
-  width: 100%;
-  border-collapse: collapse;
-  th, td {
-    padding: 12px;
-    text-align: left;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  th {
-    font-weight: 600;
-    color: #555;
-  }
-}
-.avatar-circle {
-  display: inline-block;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  text-align: center;
-  line-height: 32px;
-  font-weight: bold;
-  color: white;
-}
-
-/* --- Quiz in Progress Section --- */
-.admin-quiz-section {
-  .quiz-progress {
-    font-size: 1.1em;
-    color: #555;
-    margin-bottom: 10px;
-  }
-  .timer {
-    font-size: 2.5em;
-    font-weight: bold;
-    color: #4a90e2;
-    text-align: center;
-    margin-bottom: 20px;
-  }
-
-  .quiz-question-area {
-    text-align: center;
-    margin-bottom: 25px;
-  }
-
-  .current-q-img {
-    max-width: 100%;
-    max-height: 300px;
-    height: auto;
-    border-radius: 8px;
-    margin: 0 auto 20px auto;
-    display: block;
-    object-fit: contain;
-  }
-
-  .quiz-q-text {
-    font-size: 1.4em;
-    font-weight: 500;
-    color: #333;
-  }
-  
-  .admin-options-container {
-    margin-top: 25px;
-    display: grid;
-    gap: 15px;
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .admin-option-btn {
-    padding: 15px;
-    font-size: 1em;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    background: #fdfdfd;
-    color: #333;
-    text-align: center;
-  }
-  
-  .admin-fill-text-display {
-    grid-column: 1 / -1;
-    input {
-      width: 100%;
-      padding: 14px;
-      border: 2px dashed #ddd;
-      border-radius: 8px;
-      font-size: 1em;
-      text-align: center;
-      background-color: #f9f9f9;
-      cursor: not-allowed;
-    }
-  }
-
-  .admin-option-image-btn {
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    background: #fdfdfd;
-    padding: 10px;
+/* Header */
+.led-header, .admin-header {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px;
-  }
-
-  .admin-option-image {
-    width: 100%;
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
-    border-radius: 6px;
-  }
-
-  .admin-option-label {
-    font-weight: 600;
-    font-size: 0.9em;
-    color: #444;
-  }
-}
-
-@media (min-width: 768px) {
-  .admin-quiz-section .admin-options-container {
-    grid-template-columns: repeat(4, 1fr);
-  }
-  .admin-quiz-section .admin-options-container .admin-option-btn {
-    grid-column: span 2;
-  }
-}
-
-/* --- Leaderboard & Podium --- */
-.podium-wrapper {
-  padding: 20px 0;
-}
-.podium {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 10px;
-}
-.podium-col {
-  text-align: center;
-  width: 120px;
-}
-.podium-avatar {
-  margin: 10px auto;
-}
-.podium-name {
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.podium-points {
-  color: #555;
-  font-size: 0.9em;
-}
-.podium-medal {
-  font-size: 2.5em;
-}
-.podium-gold { order: 2; }
-.podium-silver { order: 1; }
-.podium-bronze { order: 3; }
-
-// src/components/AdminPanel/AdminPanel.scss
-
-// --- Add these new styles for the Presenter View Options ---
-
-.admin-options-container {
-    width: 100%;
-    margin-top: 24px;
-    border-top: 1px solid #e5e7eb;
-    padding-top: 24px;
-    display: grid;
-    gap: 12px;
-
-    // Default layout for 2 or 4 options
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-}
-
-// Style for standard text choice buttons
-.admin-option-btn {
-    background-color: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 16px;
-    font-size: 1.1rem;
-    text-align: center;
-    color: #374151;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-}
-
-// Style for the disabled text input field
-.admin-fill-text-display {
-    grid-column: 1 / -1; // Make it span the full width
-
-    input {
-        width: 100%;
-        padding: 16px;
-        font-size: 1.1rem;
-        border: 2px dashed #d1d5db;
-        border-radius: 8px;
-        background-color: #f9fafb;
-        text-align: center;
-        box-sizing: border-box;
-
-        &::placeholder {
-            color: #9ca3af;
+    margin-bottom: 38px;
+    .led-title, h1 {
+        font-size: 2.6rem;
+        font-weight: 900;
+        letter-spacing: 2px;
+        color: #1565c0;
+        margin: 0;
+    }
+    .led-roomcode {
+        font-size: 1.6rem;
+        color: #d84315;
+        font-weight: bold;
+        margin-right: 30px;
+        span {
+            background: #ffd600;
+            color: #222;
+            padding: 0 18px;
+            border-radius: 9px;
+            font-size: 1.7rem;
+            margin-left: 10px;
+            font-weight: 900;
+        }
+    }
+    .led-controls, .admin-header-btns {
+        .led-btn, .admin-btn {
+            font-size: 1.15rem;
+            padding: 0.6em 1.2em;
+            margin-left: 18px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: 0 2px 8px #eee;
+            transition: background 0.2s;
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: #fff;
+            &.reset, &.reset-btn {
+                background: linear-gradient(135deg, #fa8bff 0%, #2bd2ff 100%);
+            }
+            &:hover { opacity: 0.88; }
         }
     }
 }
 
-// Style for image-based choices
+/* Room Info / QR Section */
+.led-roominfo {
+    display: flex;
+    align-items: center;
+    margin-bottom: 44px;
+    background: linear-gradient(90deg, #fffde4 0%, #f1f1f1 100%);
+    border-radius: 24px;
+    box-shadow: 0 4px 32px rgba(60, 140, 255, 0.09);
+    padding: 38px 60px;
+    .led-qr-sec {
+        margin-right: 40px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .led-room-details {
+        .led-roomid-value {
+            font-size: 2rem;
+            color: #e65100;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .led-url {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            word-break: break-all;
+            color: #1976d2;
+        }
+        .led-instruction {
+            font-size: 1rem;
+            color: #43a047;
+            font-weight: 700;
+        }
+    }
+}
+
+/* Participant List */
+.led-participants {
+    margin-bottom: 44px;
+    background: linear-gradient(90deg, #ffd6e4 0%, #fffde4 100%);
+    border-radius: 24px;
+    box-shadow: 0 2px 20px rgba(255, 105, 180, 0.09);
+    padding: 38px 60px;
+    .led-section-title {
+        font-size: 1.7rem;
+        margin-bottom: 15px;
+        color: #c62828;
+        font-weight: 900;
+        text-align: left;
+    }
+    .led-participant-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        min-height: 60px;
+        .led-participant-name {
+            background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%);
+            border-radius: 14px;
+            font-size: 1.4rem;
+            padding: 18px 34px;
+            margin-bottom: 8px;
+            font-weight: 700;
+            color: #fff;
+            box-shadow: 0 0 10px #eee;
+        }
+        .led-nobody {
+            font-size: 1.2rem;
+            color: #888;
+        }
+    }
+}
+
+/* Question Section */
+.led-question,
+.admin-quiz-section {
+    background: linear-gradient(135deg, #fceabb 0%, #f8b500 100%);
+    border-radius: 32px;
+    box-shadow: 0 8px 32px 0 rgba(252, 234, 187, 0.33);
+    padding: 40px 5vw;
+    margin: 36px auto 48px auto;
+    max-width: 900px;
+    color: #222;
+    .quiz-header, .led-question-number {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 2rem;
+        font-weight: 900;
+        color: #fa8b0c;
+        margin-bottom: 24px;
+        strong {
+            color: #ff4081;
+            text-shadow: 1px 1px 6px #fffde4;
+        }
+        .timer, .led-timer {
+            font-size: 2rem;
+            color: #388e3c;
+            background: #fffde4;
+            padding: 7px 20px;
+            border-radius: 14px;
+            font-weight: bold;
+            box-shadow: 0 2px 8px #ffe29f;
+        }
+        .led-timer-low { color: #e53935; }
+    }
+    .quiz-question-area, .led-question-text {
+        text-align: center;
+        margin-bottom: 22px;
+        .current-q-img, .led-question-image {
+            max-width: 440px;
+            border-radius: 18px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 16px #ffd600;
+            border: 3px solid #fff;
+        }
+        .quiz-q-text, .led-question-text {
+            font-size: 2em;
+            color: #5e35b1;
+            font-weight: 900;
+            margin-top: 10px;
+            margin-bottom: 10px;
+            text-shadow: 0 1px 10px #fffde4;
+        }
+    }
+}
+
+/* Option Buttons (Text) */
+.admin-options-container {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    margin-top: 24px;
+    margin-bottom: 18px;
+    justify-items: center;
+}
+.admin-option-btn {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: #fff;
+    font-size: 1.3rem;
+    padding: 18px 32px;
+    border-radius: 14px;
+    font-weight: 700;
+    min-width: 180px;
+    text-align: center;
+    box-shadow: 0 2px 10px #b2ebf2;
+    transition: transform 0.14s, box-shadow 0.14s;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    &:hover {
+        transform: scale(1.045);
+        box-shadow: 0 6px 18px #43e97b7a;
+    }
+}
+
+/* Option Buttons (Image) */
 .admin-option-image-btn {
+    background: linear-gradient(135deg, #ffe29f 0%, #ffa99f 100%);
+    border-radius: 14px;
+    font-size: 1.2rem;
+    color: #3949ab;
+    font-weight: 700;
+    min-width: 170px;
+    text-align: center;
+    box-shadow: 0 2px 10px #fa8bff;
+    padding: 16px 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    padding: 12px;
-    background-color: #ffffff;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-
     .admin-option-image {
-        width: 100%;
-        height: 150px;
-        object-fit: cover;
-        border-radius: 6px;
+        max-width: 120px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        box-shadow: 0 1px 6px #ffa99f;
     }
-
     .admin-option-label {
-        font-size: 1.1rem;
-        font-weight: 500;
-        color: #374151;
+        font-size: 1.05rem;
+        color: #ff4081;
+        font-weight: 700;
+        margin-top: 5px;
     }
 }
-// src/components/AdminPanel/AdminPanel.scss
 
-// ... (keep all your existing styles) ...
-
-// Styles for the new Results View
-.admin-results-section {
-  background: #f9fafb;
-  text-align: center;
-
-  .results-header {
-    font-weight: 600;
-    color: #4b5563;
-    margin-bottom: 24px;
-    font-size: 1.2rem;
-  }
-
-  .admin-options-container.results {
-    .admin-option-btn {
-      transition: all 0.4s ease-in-out;
-      
-      // Style for incorrect answers
-      &.incorrect {
-        opacity: 0.3;
-        background-color: #f3f4f6;
-        border-color: #e5e7eb;
-        filter: grayscale(80%);
-      }
-      
-      // Style for the correct answer
-      &.correct {
-        background-color: #dcfce7; // A pleasant green
-        border-color: #22c55e;
-        color: #15803d;
-        font-weight: 700;
-        transform: scale(1.05); // Make it pop
-        box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
-      }
+/* Fill text field */
+.admin-fill-text-display {
+    grid-column: 1 / -1;
+    input {
+        background: #fffde4;
+        border: 2px solid #ffc107;
+        border-radius: 8px;
+        font-size: 1.2rem;
+        padding: 14px 18px;
+        color: #222;
+        width: 340px;
+        text-align: center;
+        box-shadow: 0 1px 6px #ffe29f;
     }
-  }
+}
+
+/* Live Answers Section */
+.admin-answers-container {
+    background: linear-gradient(90deg, #e0f7fa 0%, #fceabb 100%);
+    border-radius: 16px;
+    margin-top: 36px;
+    padding: 22px 32px;
+    box-shadow: 0 2px 12px #b2ebf2;
+    .admin-answers-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .admin-answer-row {
+        display: flex;
+        align-items: center;
+        font-size: 1.08rem;
+        background: #fff;
+        border-radius: 8px;
+        padding: 9px 14px;
+        box-shadow: 0 1px 6px #b2ebf2;
+        margin-bottom: 8px;
+        .admin-answer-name {
+            font-weight: bold;
+            color: #00897b;
+            min-width: 110px;
+            margin-right: 12px;
+        }
+        .admin-answer-time {
+            color: #43a047;
+            margin-left: 18px;
+            font-size: 1rem;
+        }
+    }
+}
+
+/* Leaderboard */
+.led-leaderboard {
+    margin-bottom: 48px;
+    background: linear-gradient(90deg, #fffde4 0%, #ffeabf 100%);
+    border-radius: 24px;
+    box-shadow: 0 2px 24px rgba(255, 215, 64, 0.12);
+    padding: 38px 60px;
+    .led-section-title {
+        font-size: 2.2rem;
+        margin-bottom: 18px;
+        text-align: center;
+        color: #ffd600;
+        font-weight: bold;
+        text-shadow: 1px 2px 10px #fffde4;
+    }
+    .led-leaderboard-list {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 22px;
+        .led-leaderboard-row {
+            display: flex;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #ffeabf 0%, #ffe7fa 100%);
+            border-radius: 10px;
+            padding: 14px 36px;
+            min-width: 300px;
+            box-shadow: 0 0 10px #ffeabf;
+            .led-leaderboard-rank {
+                color: #ff4081;
+                font-size: 1.8rem;
+                margin-right: 18px;
+            }
+            .led-leaderboard-name {
+                flex: 1;
+                text-align: left;
+                margin-right: 20px;
+                color: #3949ab;
+            }
+            .led-leaderboard-score {
+                font-size: 1.4rem;
+                color: #2ecc40;
+                font-weight: bold;
+            }
+            &.led-winner {
+                background: linear-gradient(90deg, #ffd600 0%, #fffde4 100%);
+                color: #222;
+                box-shadow: 0 0 18px #ffd600;
+            }
+        }
+    }
+    .led-congrats {
+        font-size: 1.5rem;
+        color: #ffd600;
+        text-align: center;
+        font-weight: bold;
+        margin-top: 12px;
+        text-shadow: 0 0 8px #fffde4;
+    }
+}
+
+/* Footer */
+.led-footer {
+    margin-top: 40px;
+    padding-bottom: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    .led-footer-logo {
+        height: 60px;
+        margin-right: 18px;
+    }
+    .led-footer-sponsor {
+        height: 36px;
+    }
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .led-question,
+    .admin-quiz-section,
+    .led-leaderboard,
+    .led-roominfo,
+    .led-participants {
+        padding: 18px 5vw;
+    }
+    .led-header, .admin-header {
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 650px) {
+    .led-question,
+    .admin-quiz-section,
+    .led-leaderboard,
+    .led-roominfo,
+    .led-participants {
+        padding: 10px 3vw;
+        font-size: 0.95em;
+    }
+    .quiz-header, .led-question-number {
+        font-size: 1.1em;
+        flex-direction: column;
+        gap: 8px;
+    }
 }

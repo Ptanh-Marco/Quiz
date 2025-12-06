@@ -1,8 +1,17 @@
-// src/components/AdminPanel/LiveQuestionView.jsx
+const LiveQuestionView = ({
+    question,
+    timer,
+    currentQuestionIndex,
+    totalQuestions,
+    answers = [],
+    participants = []
+}) => {
+    if (!question) return null;
 
-import React from 'react';
-
-const LiveQuestionView = ({ question, timer, currentQuestionIndex, totalQuestions }) => {
+    // Defensive: avoid NaN
+    const safeIndex = typeof currentQuestionIndex === "number" && !isNaN(currentQuestionIndex)
+        ? currentQuestionIndex + 1
+        : "?";
     return (
         <section className="admin-card admin-quiz-section">
             <div className="quiz-header">

@@ -1,94 +1,80 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { db } from "../../config/firebaseConfig";
+import { ref, get, set } from "firebase/database";
 
-// A mock API function to simulate network delay
-const fetchQuestionById = (id, signal) => {
-    // Simulate a random network delay between 200ms and 1.5s
-    const delay = Math.random() * 1300 + 200;
+function useRoomId() {
+    const location = useLocation();
+    const params = new URLSearchParams(location.search);
+    return params.get("roomId");
+}
 
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            // Check if the request was aborted while waiting
-            if (signal.aborted) {
-                return reject(new DOMException('Aborted', 'AbortError'));
-            }
+export default function ParticipantQuiz() {
+    const roomId = useRoomId();
+    const [roomExists, setRoomExists] = useState(null);
+    const [participantName, setParticipantName] = useState("");
+    const [joined, setJoined] = useState(false);
 
-            const questions = {
-                1: { id: 1, text: "What is the capital of Japan?" },
-                2: { id: 2, text: "Which planet is known as the Red Planet?" },
-                3: { id: 3, text: "What is the largest mammal in the world?" },
-            };
-            resolve(questions[id]);
-        }, delay);
-    });
-};
-
-
-// --- THIS IS THE COMPONENT WITH THE BEST-PRACTICE SOLUTION ---
-const QuestionDisplay = ({ questionId }) => {
-    const [question, setQuestion] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
+    // 1. Check if room exists in Firebase
     useEffect(() => {
-        // 1. Create a new AbortController for this specific effect run.
-        const controller = new AbortController();
+        if (!roomId) return;
+        get(ref(db, `rooms/${roomId}`)).then(snap => {
+            setRoomExists(snap.exists());
+        });
+    }, [roomId]);
 
-        const getQuestion = async () => {
-            try {
-                setLoading(true);
-                setError(null);
+    // 2. Join the room as a participant
+    const handleJoin = async () => {
+        if (!participantName || !roomId) return;
+        const pid = Math.random().toString(36).substr(2, 9); // Generate random ID
+        await set(ref(db, `rooms/${roomId}/participants/${pid}`), {
+            name: participantName,
+            joined: Date.now()
+        });
+        setJoined(true);
+    };
 
-                // 2. Pass the controller's signal to the fetch function.
-                const questionData = await fetchQuestionById(questionId, controller.signal);
+    // 3. UI
+    if (!roomId)
+        return <div style={{ padding: '40px' }}>Room ID not found in URL.<br />Please use a valid participant link.</div>;
 
-                // The data is fetched successfully. We can now update the state.
-                setQuestion(questionData);
+    if (roomExists === false)
+        return <div style={{ padding: '40px' }}>Room not found.<br />Please check the link or contact the quiz organizer.</div>;
 
-            } catch (err) {
-                // 3. If the fetch was aborted, the error name will be 'AbortError'.
-                // We check for this and simply ignore it, because it's an expected cancellation.
-                if (err.name === 'AbortError') {
-                    console.log(`Fetch for question ${questionId} was aborted.`);
-                } else {
-                    // It's a real network or API error.
-                    setError('Failed to fetch the question.');
-                    console.error(err);
-                }
-            } finally {
-                // This runs regardless of success or failure.
-                // We only stop loading if the component hasn't been unmounted/re-rendered.
-                if (!controller.signal.aborted) {
-                    setLoading(false);
-                }
-            }
-        };
+    if (roomExists === null)
+        return <div style={{ padding: '40px' }}>Loading room info…</div>;
 
-        getQuestion();
+    if (!joined)
+        return (
+            <div style={{ padding: '40px', maxWidth: 400, margin: '0 auto' }}>
+                <h2>Join Quiz Room: <span style={{ color: "#4a90e2" }}>{roomId}</span></h2>
+                <div>
+                    <label>
+                        Your Name: <br />
+                        <input
+                            type="text"
+                            value={participantName}
+                            onChange={e => setParticipantName(e.target.value)}
+                            style={{ padding: "8px", fontSize: "1.2em", width: "90%", borderRadius: "6px" }}
+                        />
+                    </label>
+                </div>
+                <button
+                    style={{ marginTop: "20px", padding: "10px 22px", fontSize: "1em" }}
+                    onClick={handleJoin}
+                    disabled={!participantName}
+                >
+                    Join Quiz
+                </button>
+            </div>
+        );
 
-        // 4. THE CLEANUP FUNCTION: This is the most important part.
-        // React will call this function when the component unmounts OR
-        // when the `questionId` dependency changes, just before running the effect again.
-        return () => {
-            console.log(`Cleaning up effect for question ${questionId}. Aborting fetch.`);
-            controller.abort();
-        };
-
-    }, [questionId]); // The dependency array: re-run the effect when `questionId` changes.
-
-    if (loading) {
-        return <div className="question-container loading">Loading question...</div>;
-    }
-
-    if (error) {
-        return <div className="question-container error">{error}</div>;
-    }
-
+    // 4. After joining, show quiz interface (replace with your quiz UI)
     return (
-        <div className="question-container">
-            <h2>Question #{question?.id}</h2>
-            <p>{question?.text}</p>
+        <div style={{ padding: '40px' }}>
+            <h2>Welcome, {participantName}!</h2>
+            <div>Waiting for quiz to start…</div>
+            {/* TODO: Show questions, timer, etc. based on roomId */}
         </div>
     );
-};
-
-export default QuestionDisplay;
+}
