@@ -399,7 +399,9 @@ export default function AdminPanel() {
     }
 
     // --- Main LED Structure ---
-    const participantURL = `${window.location.origin}/#/participant?roomId=${roomId}`;
+    const basePath = process.env.PUBLIC_URL || '/';
+    const participantURL = `${window.location.origin}${basePath}/#/participant?roomId=${roomId}`;
+//    const participantURL = `${window.location.origin}/#/participant?roomId=${roomId}`;
     const currentQuestion = questions[quizState.currentQuestionIndex];
 
     return (
