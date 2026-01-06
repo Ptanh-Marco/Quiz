@@ -3,7 +3,7 @@ import Papa from "papaparse";
 import { Wheel } from "react-custom-roulette";
 
 // Settings
-const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRpwiRyswcJ8kBnT_EzvQgqqrFJt9u7KGrZR64CgSBfdSCwPwMrjl6xIBbZdnYWIRrwb686s5qbtJDJ/pub?gid=0&single=true&output=csv";
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTVChZ9SEf9h1812OKiOgjb25gYEmGuU9feyquCqB09VetwLwjvxr5xSNYD-CLv58QpVNmMTepI8GE4/pub?gid=1577263884&single=true&output=csv";
 const TEAM_COUNT = 3;
 
 // Utility
@@ -160,7 +160,6 @@ function LineUpRandom() {
     async function fetchPlayersFromSheet() {
         const response = await fetch(CSV_URL);
         const csv = await response.text();
-
         let csvLines = csv.split('\n');
         if (csvLines.length <= 3) {
             return []; // Not enough data
