@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import Papa from "papaparse";
 import { Wheel } from "react-custom-roulette";
+import { db } from '../../config/firebaseConfig';
+import { ref, get, runTransaction } from "firebase/database";
 
 // Settings
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTVChZ9SEf9h1812OKiOgjb25gYEmGuU9feyquCqB09VetwLwjvxr5xSNYD-CLv58QpVNmMTepI8GE4/pub?gid=1577263884&single=true&output=csv";
@@ -15,6 +17,28 @@ function tierSortKey(tier) {
         return parseFloat(match[1]);
     }
     return 9999;
+}
+
+// Realtime Database Count Helpers
+function getTodayString() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+async function incrementRandomCount() {
+    const today = getTodayString();
+    const counterRef = ref(db, `randomCounts/${today}`);
+    await runTransaction(counterRef, current => (current || 0) + 1);
+}
+
+async function getRandomCountToday() {
+    const today = getTodayString();
+    const counterRef = ref(db, `randomCounts/${today}`);
+    const snap = await get(counterRef);
+    return snap.exists() ? snap.val() : 0;
 }
 
 // Display helpers
@@ -156,6 +180,17 @@ function LineUpRandom() {
     const [remainderIdx, setRemainderIdx] = useState(0);
     const advancingTier = useRef(false);
 
+    // Randomization count state
+    const [randomCountToday, setRandomCountToday] = useState(0);
+
+    // For "count only once per process"
+    const hasCountedRef = useRef(false);
+
+    // Load today's count on mount
+    useEffect(() => {
+        getRandomCountToday().then(setRandomCountToday);
+    }, []);
+
     // Fetch players from Google Sheet
     async function fetchPlayersFromSheet() {
         const response = await fetch(CSV_URL);
@@ -164,20 +199,15 @@ function LineUpRandom() {
         if (csvLines.length <= 3) {
             return []; // Not enough data
         }
-
-        // Remove first 3 rows, filter out empty lines
         csvLines = csvLines.slice(3).filter(line => line.trim() !== "");
         if (csvLines.length === 0) {
-            return []; // No data after skipping
+            return [];
         }
-
         const cleanedCsv = csvLines.join('\n');
         const { data } = Papa.parse(cleanedCsv, {
             header: true,
             skipEmptyLines: true
         });
-
-        // Defensive filtering: check if "Danh sách" and "Tier" exist and are non-empty
         return data
             .filter(p =>
                 p && typeof p === 'object' &&
@@ -271,7 +301,6 @@ function LineUpRandom() {
         // Build first round pool
         const tierPlayers = tierPlayersRef.current;
         const available = tierPlayers.filter(p => !assignedNamesRef.current.has(p.name));
-        const fullRounds = Math.floor(tierPlayers.length / TEAM_COUNT) * TEAM_COUNT;
         const tier = sortedTiers[currentTierIdx];
 
         if (available.length >= TEAM_COUNT) {
@@ -289,10 +318,8 @@ function LineUpRandom() {
         const tier = sortedTiers[currentTierIdx];
         const tierPlayers = tierPlayersRef.current;
         const available = tierPlayers.filter(p => !assignedNamesRef.current.has(p.name));
-        const fullRounds = Math.floor(tierPlayers.length / TEAM_COUNT) * TEAM_COUNT;
 
         if (div3Tiers.includes(tier)) {
-            // Divisible by 3: just advance or finish
             if (available.length > 0) {
                 setRoundPlayers([...available]);
                 setTeamInRound(0);
@@ -302,8 +329,6 @@ function LineUpRandom() {
             }
             return;
         }
-
-        // Not divisible by 3
         if (available.length >= TEAM_COUNT) {
             setRoundPlayers([...available]);
             setTeamInRound(0);
@@ -331,7 +356,7 @@ function LineUpRandom() {
         assignMode = "remainder";
     }
 
-    // Handle wheel stop
+    // Handle wheel stop (no counter increment here!)
     function handleWheelStop() {
         if (assignMode === "round") {
             const player = roundPlayers[prizeNumber];
@@ -398,6 +423,19 @@ function LineUpRandom() {
         currentTierIdx >= sortedTiers.length
     );
 
+    // Count only once per process
+    useEffect(() => {
+        if (allAssigned && !hasCountedRef.current) {
+            incrementRandomCount().then(() => {
+                setRandomCountToday(c => c + 1);
+                hasCountedRef.current = true;
+            });
+        }
+        if (!allAssigned) {
+            hasCountedRef.current = false;
+        }
+    }, [allAssigned]);
+
     // Display info
     let displayPlayer = null;
     if (!hasStarted) {
@@ -411,6 +449,9 @@ function LineUpRandom() {
     return (
         <div style={{ maxWidth: 1200, margin: "40px auto", textAlign: "center" }}>
             <h2>Futsal Team Randomizer</h2>
+            <div style={{ marginBottom: 12 }}>
+                Today's Randomizations: <b>{randomCountToday}</b>
+            </div>
             <button onClick={syncData}>Sync Data from Google Sheet</button>
             <button
                 style={{ marginLeft: 16, fontWeight: "bold", color: "#1976d2", background: "#fff" }}
