@@ -159,6 +159,69 @@ export default function AdminPanel() {
     const quizStateRef = useRef(quizState);
     useEffect(() => { quizStateRef.current = quizState; }, [quizState]);
 
+    // --- Scoring & Question Logic ---
+    const handleEndOfQuestion = useCallback(async () => {
+        if (isProcessingRef.current) return;
+        isProcessingRef.current = true;
+        const questionIndexToProcess = quizStateRef.current.currentQuestionIndex;
+        const q = questions[questionIndexToProcess];
+        const qid = q?.id;
+        try {
+            if (q && qid) {
+                const allAnswersSnap = await get(ref(db, `rooms/${roomId}/quizState/answers`));
+                const allAnswers = allAnswersSnap.val() || {};
+                const participantsSnap = await get(ref(db, `rooms/${roomId}/participants`));
+                const participantsObj = participantsSnap.val() || {};
+                const correctParticipants = Object.keys(participantsObj)
+                    .map(pid => {
+                        const ansObj = allAnswers[pid]?.[qid] || {};
+                        let isCorrect;
+                        if (Array.isArray(q.correct)) {
+                            isCorrect = q.correct.some(
+                                ans =>
+                                    ans.trim().toLowerCase() ===
+                                    (String(ansObj.answer || "")).trim().toLowerCase()
+                            );
+                        } else {
+                            isCorrect =
+                                (String(ansObj.answer || "")).trim().toLowerCase() ===
+                                (String(q.correct || "")).trim().toLowerCase();
+                        }
+                        return isCorrect
+                            ? {
+                                pid,
+                                timeToAnswer: ansObj.timeToAnswer ?? QUESTION_TIME_LIMIT
+                            }
+                            : null;
+                    })
+                    .filter(Boolean);
+                correctParticipants.sort((a, b) => a.timeToAnswer - b.timeToAnswer);
+                const N = correctParticipants.length;
+                const S = N > 0 ? (N * (N + 1)) / 2 : 1;
+                const updates = {};
+                correctParticipants.forEach((p, i) => {
+                    updates[`rooms/${roomId}/scores/${p.pid}/perQuestion/${questionIndexToProcess}`] =
+                        Math.round((1000 * (N - i)) / S);
+                });
+                if (Object.keys(updates).length > 0) await update(ref(db), updates);
+            }
+            const nextIndex = questionIndexToProcess + 1;
+            if (nextIndex < questions.length) {
+                set(ref(db, `rooms/${roomId}/quizState`), {
+                    ...quizStateRef.current,
+                    currentQuestionIndex: nextIndex,
+                    timer: QUESTION_TIME_LIMIT
+                });
+            } else {
+                set(ref(db, `rooms/${roomId}/quizState/finished`), true);
+            }
+        } catch (error) {
+            console.error("Error processing end of question:", error);
+        } finally {
+            isProcessingRef.current = false;
+        }
+    }, [questions, roomId]);
+
     // --- Load questions ---
     useEffect(() => {
         const questionsRef = ref(db, "questions");
@@ -238,7 +301,7 @@ export default function AdminPanel() {
     useEffect(() => {
         if (!quizState.started || quizState.finished) return;
         if (quizState.timer <= 0) {
-            handleEndOfQuestion();
+            // Do not call handleEndOfQuestion here; we handle it in the fallback below.
             return;
         }
         const timerId = setInterval(() => {
@@ -248,68 +311,16 @@ export default function AdminPanel() {
         return () => clearInterval(timerId);
     }, [quizState.started, quizState.finished, quizState.timer, roomId]);
 
-    // --- Scoring & Question Logic ---
-    const handleEndOfQuestion = useCallback(async () => {
-        if (isProcessingRef.current) return;
-        isProcessingRef.current = true;
-        const questionIndexToProcess = quizStateRef.current.currentQuestionIndex;
-        const q = questions[questionIndexToProcess];
-        const qid = q?.id;
-        try {
-            if (q && qid) {
-                const allAnswersSnap = await get(ref(db, `rooms/${roomId}/quizState/answers`));
-                const allAnswers = allAnswersSnap.val() || {};
-                const participantsSnap = await get(ref(db, `rooms/${roomId}/participants`));
-                const participantsObj = participantsSnap.val() || {};
-                const correctParticipants = Object.keys(participantsObj)
-                    .map(pid => {
-                        const ansObj = allAnswers[pid]?.[qid] || {};
-                        let isCorrect;
-                        if (Array.isArray(q.correct)) {
-                            isCorrect = q.correct.some(
-                                ans =>
-                                    ans.trim().toLowerCase() ===
-                                    (ansObj.answer || "").trim().toLowerCase()
-                            );
-                        } else {
-                            isCorrect =
-                                (ansObj.answer || "").trim().toLowerCase() ===
-                                (q.correct || "").trim().toLowerCase();
-                        }
-                        return isCorrect
-                            ? {
-                                pid,
-                                timeToAnswer: ansObj.timeToAnswer ?? QUESTION_TIME_LIMIT
-                            }
-                            : null;
-                    })
-                    .filter(Boolean);
-                correctParticipants.sort((a, b) => a.timeToAnswer - b.timeToAnswer);
-                const N = correctParticipants.length;
-                const S = N > 0 ? (N * (N + 1)) / 2 : 1;
-                const updates = {};
-                correctParticipants.forEach((p, i) => {
-                    updates[`rooms/${roomId}/scores/${p.pid}/perQuestion/${questionIndexToProcess}`] =
-                        Math.round((1000 * (N - i)) / S);
-                });
-                if (Object.keys(updates).length > 0) await update(ref(db), updates);
-            }
-            const nextIndex = questionIndexToProcess + 1;
-            if (nextIndex < questions.length) {
-                set(ref(db, `rooms/${roomId}/quizState`), {
-                    ...quizStateRef.current,
-                    currentQuestionIndex: nextIndex,
-                    timer: QUESTION_TIME_LIMIT
-                });
-            } else {
-                set(ref(db, `rooms/${roomId}/quizState/finished`), true);
-            }
-        } catch (error) {
-            console.error("Error processing end of question:", error);
-        } finally {
-            isProcessingRef.current = false;
+    // --- Fallback: Ensure handleEndOfQuestion always fires at timer===0 ---
+    useEffect(() => {
+        if (
+            quizState.started &&
+            !quizState.finished &&
+            quizState.timer === 0
+        ) {
+            handleEndOfQuestion();
         }
-    }, [questions, roomId]);
+    }, [quizState.timer, quizState.started, quizState.finished, handleEndOfQuestion]);
 
     // --- Start Quiz ---
     const startQuiz = async () => {

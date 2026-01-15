@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from '../../config/firebaseConfig';
-import { ref, onValue, push, set, get, remove } from "firebase/database";
+import { ref, onValue, push, set, get } from "firebase/database";
 import Confetti from "react-confetti";
 import { useLocation, useParams } from "react-router-dom";
 import "./ParticipantQuiz.scss";
@@ -38,7 +38,11 @@ export default function ParticipantQuiz() {
     const [totalParticipants, setTotalParticipants] = useState(0);
     const [blocked, setBlocked] = useState(false);
     const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight });
-const [selected, setSelected] = useState(null); 
+    const [selected, setSelected] = useState(null);
+
+    // --- Input state for fill_text ---
+    const [textInputValue, setTextInputValue] = useState("");
+
     // --- JOIN LOGIC ---
     const handleJoin = async () => {
         if (!username.trim()) {
@@ -164,11 +168,16 @@ const [selected, setSelected] = useState(null);
         return () => window.removeEventListener("resize", handleResize);
     }, []);
 
+    // --- Reset text input for fill_text on question change ---
+    useEffect(() => {
+        setTextInputValue("");
+    }, [quizState.currentQuestionIndex]);
+
     // --- SUBMIT ANSWER LOGIC ---
     const handleSubmitAnswer = (questionId, answer) => {
         if (!participantId || answers[questionId]) return;
         set(ref(db, `rooms/${roomId}/quizState/answers/${participantId}/${questionId}`), {
-            answer: answer,
+            answer: String(answer),
             answeredAt: Date.now(),
             timeToAnswer: QUESTION_TIME_LIMIT - quizState.timer,
         });
@@ -243,8 +252,19 @@ const [selected, setSelected] = useState(null);
                                                 ))}
                                             {/* fill_text */}
                                             {q.type === "fill_text" && (
-                                                <form className="text-answer-form" onSubmit={(e) => { e.preventDefault(); handleSubmitAnswer(q.id, e.target.answer.value); }}>
-                                                    <input type="text" name="answer" className="text-input" disabled={hasAnsweredCurrent} placeholder="Type your answer..." />
+                                                <form className="text-answer-form" onSubmit={(e) => {
+                                                    e.preventDefault();
+                                                    handleSubmitAnswer(q.id, textInputValue);
+                                                }}>
+                                                    <input
+                                                        type="text"
+                                                        name="answer"
+                                                        className="text-input"
+                                                        disabled={hasAnsweredCurrent}
+                                                        placeholder="Type your answer..."
+                                                        value={textInputValue}
+                                                        onChange={(e) => setTextInputValue(e.target.value)}
+                                                    />
                                                     <button type="submit" className="submit-btn" disabled={hasAnsweredCurrent}>Submit</button>
                                                 </form>
                                             )}
